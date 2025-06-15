@@ -1,11 +1,22 @@
+using DocumentAIPoC.Services;
+using System;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Registrar DocumentAiService para DI
+builder.Services.AddScoped<DocumentAiService>();
+
+// Configura credencial de google embebida
+var credentialRelativePath = builder.Configuration["DocumentAI:CredentialFile"];
+var credentialFilePath = Path.Combine(AppContext.BaseDirectory, credentialRelativePath);
+Console.WriteLine($"[INFO] GOOGLE_APPLICATION_CREDENTIALS resolved to: {credentialFilePath}");
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", credentialFilePath);
+
 
 var app = builder.Build();
 
@@ -17,9 +28,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
