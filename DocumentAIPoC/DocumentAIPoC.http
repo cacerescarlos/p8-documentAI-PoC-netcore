@@ -1,0 +1,6 @@
+@DocumentAIPoC_HostAddress = http://localhost:5221
+
+GET {{DocumentAIPoC_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
