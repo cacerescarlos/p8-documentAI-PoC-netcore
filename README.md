@@ -1,7 +1,9 @@
-# p8-documentAI-PoC-netcore
+# Document AI: Revolucionando la Gestión de Documentos con Inteligencia Artificial
 Montando un Proof of Concept (PoC) para procesar PDFs con IA usando Google Document AI + .NET Core.  El objetivo: recibir documentos, extraer campos clave como NIT, devolver resultados limpios vía API y dejar todo documentado
+<div align="center">
+<img src="https://servinformacion.com/wp-content/uploads/2024/04/Document-AI.png.webp" align="center" style="width: 100%" />
+</div>  
 
----
 ## 📄 DocumentAIPoC — Prueba de Concepto .NET Core + Google Document AI
 
 Este README explica cómo configurar, ejecutar y mantener un PoC que conecta una API ASP.NET Core con Google Document AI.
