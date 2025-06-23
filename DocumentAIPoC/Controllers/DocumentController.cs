@@ -7,7 +7,7 @@ using PdfSharpCore.Pdf;
 namespace DocumentAIPoC.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/document")]
     public class DocumentController : ControllerBase
     {
         private readonly DocumentAiService _docAiService;
@@ -18,31 +18,39 @@ namespace DocumentAIPoC.Controllers
         }
 
         /// <summary>
-        /// Test rápido para verificar que la API funciona.
+        /// Procesa el documento usando el procesador Document OCR de Google Document AI.
+        /// Devuelve:
+        /// - <b>Text</b>: Texto plano detectado mediante reconocimiento óptico de caracteres (OCR).
+        /// No extrae campos clave ni estructura de tablas.
+        /// Ideal para digitalizar escaneos simples, cartas o imágenes sin estructura.
         /// </summary>
-        [HttpGet("ping")]
-        public IActionResult Ping()
+        [HttpPost("ocr")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> Ocr([FromForm] UploadDocumentRequest request)
         {
-            return Ok(new { message = "API OK" });
-        }
+            var file = request.File;
+            if (file == null || file.Length == 0)
+                return BadRequest("Archivo no proporcionado.");
 
-        [HttpGet("test-pdf")]
-        public IActionResult GetTestPdf()
-        {
-            var pdf = new PdfDocument();
-            var page = pdf.AddPage();
-            var gfx = XGraphics.FromPdfPage(page);
-            var font = new XFont("Verdana", 20);
-            gfx.DrawString("¡PdfSharpCore instalado y funcionando!", font, XBrushes.Black, new XPoint(100, 100));
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
 
-            var ms = new MemoryStream();
-            pdf.Save(ms, false);
-            ms.Position = 0;
-            return File(ms, "application/pdf", "Test_PdfSharpCore.pdf");
+            var document = await _docAiService.ProcessOcrAsync(ms.ToArray());
+
+            return Ok(new
+            {
+                Text = document.Text
+            });
         }
 
         /// <summary>
-        /// Procesa el documento con Form Parser.
+        /// Procesa el documento usando el Form Parser de Document AI.
+        /// Devuelve:
+        /// - <b>Text</b>: Texto crudo detectado mediante OCR.
+        /// - <b>Fields</b>: Campos clave tipo key-value extraídos del formulario.
+        /// - <b>Pages</b>: Información de cada página (número, dimensiones).
+        /// - <b>Tables</b>: Estructura de tablas detectadas (cabeceras y filas).
+        /// Ideal para formularios semi-estructurados como facturas, recibos, contratos y reportes.
         /// </summary>
         [HttpPost("form-parser")]
         [Consumes("multipart/form-data")]
@@ -57,21 +65,51 @@ namespace DocumentAIPoC.Controllers
 
             var document = await _docAiService.ProcessFormParserAsync(ms.ToArray());
 
+            var Fields = document.Pages
+           .SelectMany(p => p.FormFields)
+           .Select(f => new
+           {
+               FieldName = f.FieldName?.TextAnchor?.Content,
+               FieldValue = f.FieldValue?.TextAnchor?.Content
+           });
+
+            var Tables = document.Pages
+                .SelectMany(p => p.Tables)
+                .Select(t => new
+                {
+                    Headers = t.HeaderRows.Select(row => row.Cells.Select(c => c.Layout.TextAnchor.Content).ToList()).ToList(),
+                    Body = t.BodyRows.Select(row => row.Cells.Select(c => c.Layout.TextAnchor.Content).ToList()).ToList()
+                });
+
             return Ok(new
             {
                 Text = document.Text,
-                Fields = document.Entities.Select(e => new
+
+                // Entidades semánticas, como organizaciones, nombres, etc.
+                Entities = document.Entities.Select(e => new
                 {
                     e.Type,
                     e.MentionText,
                     e.Confidence
-                })
+                }),
+
+                // Campos clave-valor detectados visualmente.
+                Fields = Fields,
+
+                // Tablas:
+                Tables = Tables
+
             });
         }
 
 
+
         /// <summary>
-        /// Procesa el documento con Summarizer.
+        /// Procesa el documento usando el procesador Summarizer de Google Document AI.
+        /// Devuelve:
+        /// - <b>Text</b>: Texto resumido generado automáticamente.
+        /// Diseñado para condensar información redundante y producir una versión breve.
+        /// Ideal para documentos largos con contenido repetitivo o denso.
         /// </summary>
         [HttpPost("summarize")]
         [Consumes("multipart/form-data")]
@@ -91,6 +129,40 @@ namespace DocumentAIPoC.Controllers
                 Summary = summaryDocument.Text
             });
         }
+
+        /// <summary>
+        /// Procesa el documento usando el procesador Custom Extractor de Google Document AI.
+        /// Devuelve:
+        /// - <b>Text</b>: Texto plano detectado mediante OCR.
+        /// - <b>Fields</b>: Campos clave personalizados definidos y entrenados por el usuario.
+        /// Extrae información específica según el modelo entrenado.
+        /// Ideal para documentos con estructura propia, como recibos de pago, contratos o licencias.
+        /// </summary>
+        [HttpPost("custom-extractor")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> CustomExtractor([FromForm] UploadDocumentRequest request)
+        {
+            var file = request.File;
+            if (file == null || file.Length == 0)
+                return BadRequest("Archivo no proporcionado.");
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+
+            var document = await _docAiService.ProcessCustomExtractorAsync(ms.ToArray());
+
+            return Ok(new
+            {
+                Text = document.Text,
+                Fields = document.Entities.Select(e => new
+                {
+                    e.Type,
+                    e.MentionText,
+                    e.Confidence
+                })
+            });
+        }
+
 
 
         [HttpPost("summarize-pdf")]
@@ -122,6 +194,21 @@ namespace DocumentAIPoC.Controllers
             outStream.Position = 0;
 
             return File(outStream, "application/pdf", "Resumen_DocumentAI.pdf");
+        }
+
+        [HttpGet("test-pdf")]
+        public IActionResult GetTestPdf()
+        {
+            var pdf = new PdfDocument();
+            var page = pdf.AddPage();
+            var gfx = XGraphics.FromPdfPage(page);
+            var font = new XFont("Verdana", 20);
+            gfx.DrawString("¡PdfSharpCore instalado y funcionando!", font, XBrushes.Black, new XPoint(100, 100));
+
+            var ms = new MemoryStream();
+            pdf.Save(ms, false);
+            ms.Position = 0;
+            return File(ms, "application/pdf", "Test_PdfSharpCore.pdf");
         }
 
 

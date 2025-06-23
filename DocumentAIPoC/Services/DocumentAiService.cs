@@ -24,6 +24,16 @@ namespace DocumentAIPoC.Services
         }
 
         /// <summary>
+        /// Procesa un documento usando Document OCR (básico, solo texto sin estructura).
+        /// </summary>
+        public async Task<Document> ProcessOcrAsync(byte[] fileBytes)
+        {
+            var processorId = _config["DocumentAI:OcrID"];
+            return await ProcessWithProcessorIdAsync(processorId, fileBytes);
+        }
+
+
+        /// <summary>
         /// Procesa un documento usando el Form Parser.
         /// </summary>
         public async Task<Document> ProcessFormParserAsync(byte[] fileBytes)
