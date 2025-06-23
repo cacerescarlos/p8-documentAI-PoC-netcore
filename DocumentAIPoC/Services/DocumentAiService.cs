@@ -1,39 +1,65 @@
 ﻿using Google.Cloud.DocumentAI.V1;
 using Google.Protobuf;
+using Microsoft.Extensions.Configuration;
+using System;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace DocumentAIPoC.Services
 {
     /// <summary>
-    /// Servicio para procesar documentos PDF usando Google Document AI.
+    /// Servicio para procesar documentos PDF usando múltiples procesadores de Google Document AI.
     /// </summary>
     public class DocumentAiService
     {
-        private readonly string _processorName;
+        private readonly IConfiguration _config;
 
-        public DocumentAiService(IConfiguration configuration)
+        public DocumentAiService(IConfiguration config)
         {
-            _processorName = configuration["DocumentAI:ProcessorID"];
+            _config = config;
 
-            var credentialRelativePath = configuration["DocumentAI:CredentialFile"];
+            var credentialRelativePath = config["DocumentAI:CredentialFile"];
             var credentialFilePath = Path.Combine(AppContext.BaseDirectory, credentialRelativePath);
             Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", credentialFilePath);
         }
 
+        /// <summary>
+        /// Procesa un documento usando el Form Parser.
+        /// </summary>
+        public async Task<Document> ProcessFormParserAsync(byte[] fileBytes)
+        {
+            var processorId = _config["DocumentAI:FormParserID"];
+            return await ProcessWithProcessorIdAsync(processorId, fileBytes);
+        }
 
         /// <summary>
-        /// Procesa el archivo PDF (como bytes) usando Document AI.
-        /// Devuelve un objeto 'Google.Cloud.DocumentAI.V1.Document' estructurado.
+        /// Procesa un documento usando el Summarizer.
         /// </summary>
-        public async Task<Google.Cloud.DocumentAI.V1.Document> ProcessDocumentAsync(byte[] fileBytes)
+        public async Task<Document> ProcessSummarizerAsync(byte[] fileBytes)
         {
-            // Crea el cliente
+            var processorId = _config["DocumentAI:SummarizerID"];
+            return await ProcessWithProcessorIdAsync(processorId, fileBytes);
+        }
+
+        /// <summary>
+        /// Procesa un documento usando el Custom Extractor.
+        /// </summary>
+        public async Task<Document> ProcessCustomExtractorAsync(byte[] fileBytes)
+        {
+            var processorId = _config["DocumentAI:CustomExtractorID"];
+            return await ProcessWithProcessorIdAsync(processorId, fileBytes);
+        }
+
+        /// <summary>
+        /// Método privado reutilizable para invocar cualquier ProcessorID.
+        /// </summary>
+        private async Task<Document> ProcessWithProcessorIdAsync(string processorId, byte[] fileBytes)
+        {
             var client = await DocumentProcessorServiceClient.CreateAsync();
 
-            // Construye la petición
             var request = new ProcessRequest
             {
-                Name = _processorName,
+                Name = processorId,
                 RawDocument = new RawDocument
                 {
                     Content = ByteString.CopyFrom(fileBytes),
@@ -41,7 +67,6 @@ namespace DocumentAIPoC.Services
                 }
             };
 
-            // Llama a Document AI y devuelve el objeto Document
             var response = await client.ProcessDocumentAsync(request);
             return response.Document;
         }
